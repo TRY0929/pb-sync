@@ -12,18 +12,18 @@ applyTo: "lib/supabase.ts,lib/notion-sync.ts,app/api/**"
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from './types'
 
-// クライアントサイド用（anon key）
+// クライアントサイド用（publishable key）
 // NEXT_PUBLIC_ プレフィックスのため安全にクライアントに公開可能
 export const supabase = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!
 )
 
-// サーバーサイド専用（service_role key）
+// サーバーサイド専用（secret key）
 // Route Handler / Server Action 以外では絶対に使用しない
 export const supabaseAdmin = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+  process.env.SUPABASE_SECRET_KEY!
 )
 ```
 

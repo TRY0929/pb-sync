@@ -28,7 +28,7 @@
 - **API Routes**: `app/api/[endpoint]/route.ts` に配置。`GET`, `POST` などの HTTP メソッド名を export する
 - **環境変数**:
   - `NEXT_PUBLIC_` プレフィックスがあるものはクライアントに公開される（機密情報は置かない）
-  - サーバーサイド専用（`SUPABASE_SERVICE_ROLE_KEY`, `GEMINI_API_KEY` など）はクライアントコンポーネントで使用しない
+  - サーバーサイド専用（`SUPABASE_SECRET_KEY`, `GEMINI_API_KEY` など）はクライアントコンポーネントで使用しない
 
 ---
 
@@ -102,7 +102,7 @@
 ## 9. セキュリティ
 
 - 環境変数を `console.log` でデバッグ出力しない
-- `SUPABASE_SERVICE_ROLE_KEY` と `GEMINI_API_KEY` は絶対にクライアントサイドのコードに含めない
+- `SUPABASE_SECRET_KEY` と `GEMINI_API_KEY` は絶対にクライアントサイドのコードに含めない
 - `.env.local` を Git にコミットしない（`.gitignore` に追加済み前提）
 
 ---

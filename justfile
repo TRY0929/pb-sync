@@ -60,7 +60,7 @@ add *packages:
 clean-notes:
   #!/usr/bin/env bash
   SUPABASE_URL=$(grep NEXT_PUBLIC_SUPABASE_URL .env.local | cut -d= -f2)
-  SERVICE_KEY=$(grep SUPABASE_SERVICE_ROLE_KEY .env.local | cut -d= -f2)
+  SERVICE_KEY=$(grep SUPABASE_SECRET_KEY .env.local | cut -d= -f2)
   curl -s -X DELETE "${SUPABASE_URL}/rest/v1/notes?id=neq.00000000-0000-0000-0000-000000000000" \
     -H "apikey: ${SERVICE_KEY}" \
     -H "Authorization: Bearer ${SERVICE_KEY}" \

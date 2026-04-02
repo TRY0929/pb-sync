@@ -30,7 +30,7 @@ https://www.notion.so/myworkspace/1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d?v=...
 
 ---
 
-## NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY
+## NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY / SUPABASE_SECRET_KEY
 
 1. [https://supabase.com/dashboard](https://supabase.com/dashboard) でプロジェクトを作成（または既存プロジェクトを選択）
 2. 左メニュー **「Project Settings」** → **「API」** を開く
@@ -39,8 +39,8 @@ https://www.notion.so/myworkspace/1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d?v=...
 | 環境変数 | 場所 |
 |---------|------|
 | `NEXT_PUBLIC_SUPABASE_URL` | **Project URL** |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | **Project API keys** → `anon` `public` |
-| `SUPABASE_SERVICE_ROLE_KEY` | **Project API keys** → `service_role` `secret` |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | **Project API keys** → Publishable |
+| `SUPABASE_SECRET_KEY` | **Project API keys** → Secret |
 
 > `service_role` キーは強力な権限を持ちます。クライアントサイドに公開しないでください。
 

@@ -121,7 +121,7 @@ export async function POST(request: NextRequest) {
 
 ```ts
 // ✅ Server Component / Route Handler でのみ使用
-const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+const serviceKey = process.env.SUPABASE_SECRET_KEY
 const geminiKey = process.env.GEMINI_API_KEY
 
 // ✅ Client Component でも使用可能
@@ -144,7 +144,7 @@ export const env = {
   GEMINI_API_KEY: requireEnv('GEMINI_API_KEY'),
   NOTION_API_KEY: requireEnv('NOTION_API_KEY'),
   NOTION_DATABASE_ID: requireEnv('NOTION_DATABASE_ID'),
-  SUPABASE_SERVICE_ROLE_KEY: requireEnv('SUPABASE_SERVICE_ROLE_KEY'),
+  SUPABASE_SECRET_KEY: requireEnv('SUPABASE_SECRET_KEY'),
 } as const
 ```
 

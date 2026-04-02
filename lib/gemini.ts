@@ -39,7 +39,7 @@ export function buildSystemPrompt(matchedNotes: MatchedNote[]): string {
 - 各要点を以下の形式で出力（要点が1つでも同様）:
 
 ### 要点タイトル（15文字以内）
-説明（200文字以内）
+説明（比較の場合はテーブル形式で出力、最大3列）
 
 - 要点は最大5つまで
 - ノートに記載がない場合は「記載なし」のみ出力
