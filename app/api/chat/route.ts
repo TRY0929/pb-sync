@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { embedText, buildSystemPrompt, streamChat, MatchedNote } from '@/lib/gemini'
-import { supabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
 
 interface ChatMessage {
   role: 'user' | 'assistant'
@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     const queryEmbedding = await embedText(lastUserMessage.content)
 
     // コサイン類似度で上位3件の関連ノートを検索
-    const { data: matchedNotes, error } = await supabaseAdmin.rpc('match_notes', {
+    const { data: matchedNotes, error } = await getSupabaseAdmin().rpc('match_notes', {
       query_embedding: queryEmbedding,
       match_count: 3,
     })

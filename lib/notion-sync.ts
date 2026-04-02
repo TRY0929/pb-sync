@@ -1,5 +1,5 @@
 import { Client } from '@notionhq/client'
-import { supabaseAdmin } from './supabase'
+import { getSupabaseAdmin } from './supabase'
 import { embedText } from './gemini'
 
 const notion = new Client({
@@ -144,7 +144,7 @@ function splitIntoChunks(text: string, chunkSize = 4000, overlap = 500): string[
 
 // 同期済みページの last_synced_at を取得（チャンクの先頭レコードで代表）
 async function fetchSyncedPages(): Promise<Map<string, string>> {
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await getSupabaseAdmin()
     .from('notes')
     .select('notion_page_id, last_synced_at')
 
@@ -197,7 +197,7 @@ export async function syncNotionToSupabase(
     if (!fullText) continue
 
     // ページ更新時は既存チャンクを全削除してから再挿入
-    const { error: deleteError } = await supabaseAdmin
+    const { error: deleteError } = await getSupabaseAdmin()
       .from('notes')
       .delete()
       .like('notion_page_id', `${page.id}%`)
@@ -210,7 +210,7 @@ export async function syncNotionToSupabase(
       const chunkTitle = chunks.length === 1 ? page.title : `${page.title} (${ci + 1}/${chunks.length})`
       const embedding = await embedText(chunks[ci])
 
-      const { error } = await supabaseAdmin.from('notes').upsert(
+      const { error } = await getSupabaseAdmin().from('notes').upsert(
         {
           notion_page_id: chunkId,
           title: chunkTitle,
