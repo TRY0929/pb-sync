@@ -34,8 +34,24 @@ export async function POST(request: NextRequest) {
 
     console.log(`[/api/chat] matched notes: ${(matchedNotes as MatchedNote[])?.map((n) => `"${n.title}" (similarity: ${n.similarity.toFixed(3)})`).join(', ') || 'none'}`)
 
+    // 全タイトルを取得してランダムに3つ選ぶ（「記載なし」時の提案用）
+    const { data: allNotes } = await getSupabaseAdmin()
+      .from('notes')
+      .select('title')
+    const uniqueTitles = [
+      ...new Set(
+        (allNotes ?? []).map((n: { title: string }) =>
+          // チャンクサフィックス "(1/3)" を除去して元タイトルに戻す
+          n.title.replace(/\s*\(\d+\/\d+\)$/, '')
+        )
+      ),
+    ]
+    const suggestedTopics = uniqueTitles
+      .sort(() => Math.random() - 0.5)
+      .slice(0, 3)
+
     // System Prompt 構築
-    const systemPrompt = buildSystemPrompt((matchedNotes as MatchedNote[]) ?? [])
+    const systemPrompt = buildSystemPrompt((matchedNotes as MatchedNote[]) ?? [], suggestedTopics)
 
     // Gemini 形式のメッセージ履歴に変換
     const geminiMessages = messages.map((m) => ({
