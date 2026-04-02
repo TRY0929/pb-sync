@@ -1,0 +1,25 @@
+# 依存パッケージ
+node_modules/
+.pnpm-store/
+
+# Next.js ビルド成果物
+.next/
+out/
+
+# 環境変数（秘密情報）
+.env.local
+.env.*.local
+
+# PWA 自動生成ファイル
+public/sw.js
+public/workbox-*.js
+public/worker-*.js
+public/fallback-*.js
+
+# OS
+.DS_Store
+Thumbs.db
+
+# エディタ
+.vscode/
+*.swp

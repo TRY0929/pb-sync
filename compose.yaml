@@ -1,0 +1,24 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "3002:3000"
+    volumes:
+      # ソースコードをマウント（ホットリロード有効）
+      - .:/app
+      # node_modules はコンテナ内のものを使用（ホストのものを上書きしない）
+      - /app/node_modules
+      # pnpm ストアをコンテナ内で管理（ホスト側と衝突しない）
+      - /app/.pnpm-store
+      # .next キャッシュもコンテナ内で管理
+      - /app/.next
+    environment:
+      - NODE_ENV=development
+      # 開発環境のプロキシ等による自己署名証明書エラーを回避
+      - NODE_TLS_REJECT_UNAUTHORIZED=0
+      # .env.local ファイルから環境変数を読み込む
+    env_file:
+      - .env.local
+    restart: unless-stopped

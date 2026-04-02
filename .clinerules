@@ -1,0 +1,231 @@
+# Cline Rules — Personal Brain Sync (PB-Sync)
+
+## プロジェクト概要
+このプロジェクトは **Next.js 14 App Router + Tailwind CSS + Supabase (pgvector) + Gemini API + Notion API** で構築された個人用 RAG チャットアプリです。
+詳細は `docs/app-spec.md` と `docs/stack.md` を参照してください。
+
+---
+
+## 1. 言語・スタイル
+
+- **言語**: TypeScript（strict モード）。`any` 型は原則禁止。やむを得ない場合は `// TODO: 型定義を強化` コメントを付ける
+- **命名規則**:
+  - ファイル名: `kebab-case.ts` / `PascalCase.tsx`（コンポーネント）
+  - 変数・関数: `camelCase`
+  - 定数: `UPPER_SNAKE_CASE`
+  - 型・インターフェース: `PascalCase`（`I` プレフィックスは不要）
+  - boolean 変数: `is` / `has` / `can` / `should` プレフィックスを付ける（例: `isSyncing`, `hasError`）
+  - イベントハンドラ: `handle` プレフィックスを付ける（例: `handleSubmit`, `handleSyncClick`）
+- **コメント**: 日本語または英語どちらでも可。意図が不明な処理には必ずコメントを付ける
+
+---
+
+## 2. Next.js App Router のルール
+
+- **デフォルトは Server Component**。クライアントのイベントハンドラや hooks (`useState`, `useEffect`) が必要な場合のみ `'use client'` を付ける
+- `'use client'` はファイルの先頭1行目に記述する
+- **データフェッチ**: Server Component では `fetch()` または Supabase SDK を直接呼ぶ。Client Component では SWR や API ルートを経由する
+- **API Routes**: `app/api/[endpoint]/route.ts` に配置。`GET`, `POST` などの HTTP メソッド名を export する
+- **環境変数**:
+  - `NEXT_PUBLIC_` プレフィックスがあるものはクライアントに公開される（機密情報は置かない）
+  - サーバーサイド専用（`SUPABASE_SERVICE_ROLE_KEY`, `GEMINI_API_KEY` など）はクライアントコンポーネントで使用しない
+
+---
+
+## 3. Tailwind CSS のルール
+
+- **モバイルファースト**: 基本スタイルをモバイル向けに記述し、`sm:` / `md:` / `lg:` で上書きする
+- クラス名は機能ごとにグループ化（レイアウト → サイズ → 色 → その他の順）
+- 独自の CSS クラスは極力作らず、Tailwind ユーティリティで完結させる
+- `globals.css` へのカスタム CSS 追加は最小限に留める
+
+---
+
+## 4. Supabase のルール
+
+- **クライアント使い分け**:
+  - サーバーサイド（Route Handlers, Server Actions）: `service_role` キーを使う `supabaseAdmin` クライアント
+  - クライアントサイド（将来的な拡張）: `anon` キーを使う `supabase` クライアント
+- クライアントは `lib/supabase.ts` でシングルトンとして初期化し、各ファイルで `import` して使う
+- **エラーハンドリング**: Supabase の戻り値は必ず `{ data, error }` を分割代入し、`error` が null でないことを確認してから処理を続ける
+  ```ts
+  const { data, error } = await supabase.from('notes').select('*')
+  if (error) throw new Error(error.message)
+  ```
+- RPC 関数 `match_notes` の呼び出しは `lib/` に集約し、Route Handler から直接 SQL を書かない
+
+---
+
+## 5. Gemini API のルール
+
+- クライアントは `lib/gemini.ts` で初期化する
+- **Embedding**: `text-embedding-004` モデルを使用。ベクトル次元は **768**
+- **Chat**: `gemini-1.5-flash` モデルを使用
+- API 呼び出しは try-catch で囲み、レート制限エラー（429）を検知した場合はリトライロジックを実装する
+- System Prompt は日本語で記述し、ユーザーのノート内容を適切に引用する
+
+---
+
+## 6. Notion API のルール
+
+- クライアントの初期化と同期ロジックは `lib/notion-sync.ts` に集約する
+- `blocks.children.list()` でコンテンツを再帰的に取得する際は、深さ制限（最大2レベル）を設ける（API レート制限対策）
+- ページタイトルは `properties.title` から取得する（Notion のページプロパティ構造を考慮）
+- 取得したテキストは HTML タグを含まないプレーンテキストに変換してから DB に保存する
+
+---
+
+## 7. エラーハンドリング
+
+- API Route Handler では必ず `try-catch` を実装し、エラー時は適切な HTTP ステータスコードと JSON エラーレスポンスを返す
+  ```ts
+  try {
+    // 処理
+  } catch (error) {
+    console.error('[API Error]', error)
+    return Response.json({ error: 'Internal Server Error' }, { status: 500 })
+  }
+  ```
+- ユーザー向けエラーメッセージは日本語で表示する
+- `console.error` には `[コンポーネント名 or API名]` プレフィックスを付ける
+
+---
+
+## 8. ファイル変更時の注意
+
+- `lib/supabase.ts` や `lib/gemini.ts` を変更する場合、それを import している全ファイルへの影響を確認する
+- `supabase/schema.sql` を変更した場合、対応する TypeScript 型定義（`lib/types.ts` など）も同期して更新する
+- `next.config.js` を変更した場合、開発サーバーの再起動が必要であることをコメントに記述する
+
+---
+
+## 9. セキュリティ
+
+- 環境変数を `console.log` でデバッグ出力しない
+- `SUPABASE_SERVICE_ROLE_KEY` と `GEMINI_API_KEY` は絶対にクライアントサイドのコードに含めない
+- `.env.local` を Git にコミットしない（`.gitignore` に追加済み前提）
+
+---
+
+## 10. コスト最適化
+
+- Gemini API の呼び出し回数を最小化する。同一テキストの再 Embedding は避ける（差分同期の徹底）
+- Supabase の DB アクセスは必要なカラムのみ `select()` で取得する（`select('*')` を避ける）
+- Notion API の `blocks.children.list()` は再帰呼び出しを制限し、1 ページあたりのリクエスト数を抑える
+
+---
+
+## 11. ファイル・関数サイズ制限
+
+### ファイル行数
+- **コンポーネントファイル（.tsx）**: 原則 **150行以内**。超える場合はコンポーネントを分割する
+- **ロジックファイル（.ts）**: 原則 **200行以内**。超える場合は責務ごとにファイルを分割する
+- **Route Handler（route.ts）**: 原則 **100行以内**。ロジックは `lib/` に切り出す
+- **設定ファイル（next.config.js 等）**: 原則 **50行以内**
+
+### 関数・メソッドの行数
+- 1関数あたり **30行以内** を目安にする
+- 超える場合は処理を意味のある単位でヘルパー関数に切り出す
+- async 関数は特に肥大化しやすいため、以下のように段階を分けて記述する
+  ```ts
+  // ✅ Good: 各処理を小さな関数に切り出す
+  export async function POST(request: NextRequest) {
+    const { messages } = await parseRequest(request)       // 1. パース
+    const embedding = await embedQuestion(messages)         // 2. Embedding
+    const notes = await searchRelatedNotes(embedding)       // 3. 検索
+    return streamGeminiResponse(notes, messages)            // 4. 応答
+  }
+
+  // ❌ Bad: 1つの関数に全処理を詰め込まない
+  ```
+
+### コンポーネントの行数
+- JSX の return ブロックは **50行以内** を目安にする
+- 複雑な条件分岐は変数に切り出してから JSX に渡す
+  ```tsx
+  // ✅ Good
+  const messageClass = isUser
+    ? 'bg-blue-600 text-white self-end'
+    : 'bg-gray-100 text-gray-800'
+  return <div className={messageClass}>{content}</div>
+
+  // ❌ Bad: JSX内でネストした三項演算子を多用しない
+  ```
+
+---
+
+## 12. フォーマット・インデント
+
+- **インデント**: スペース 2 つ（タブ不使用）
+- **セミコロン**: あり（TypeScript 標準）
+- **クォート**: シングルクォート `'`（JSX 属性は ダブルクォート `"`）
+- **末尾カンマ**: あり（`"trailingComma": "all"`）
+- **最大行長**: **100文字**。超える場合は適切な位置で折り返す
+  ```ts
+  // ✅ Good: 100文字を超える場合は折り返す
+  const { data: matchedNotes, error } = await supabaseAdmin.rpc(
+    'match_notes',
+    { query_embedding: queryEmbedding, match_count: 3 }
+  )
+
+  // ❌ Bad: 1行に長い処理を詰め込まない
+  ```
+- **空行**: 関数間・論理的なブロック間に1行の空行を入れる。2行以上の空行は使わない
+- **オブジェクト・配列**: 要素が3つ以上の場合は1要素1行で記述する
+  ```ts
+  // ✅ Good
+  const headers = {
+    'Content-Type': 'text/plain; charset=utf-8',
+    'Transfer-Encoding': 'chunked',
+    'Cache-Control': 'no-cache',
+  }
+
+  // ❌ Bad（3つ以上を1行に詰めない）
+  const headers = { 'Content-Type': 'text/plain', 'Transfer-Encoding': 'chunked', 'Cache-Control': 'no-cache' }
+  ```
+
+---
+
+## 13. Git コミット規約
+
+コミットメッセージは **Conventional Commits** 形式で記述する。
+
+```
+<type>(<scope>): <subject>
+
+[optional body]
+```
+
+### type 一覧
+
+| type | 用途 |
+|------|------|
+| `feat` | 新機能追加 |
+| `fix` | バグ修正 |
+| `docs` | ドキュメントのみの変更 |
+| `style` | フォーマット・セミコロン等（コード変更なし） |
+| `refactor` | リファクタリング（機能追加・バグ修正なし） |
+| `perf` | パフォーマンス改善 |
+| `chore` | ビルドプロセス・補助ツールの変更 |
+
+### scope 一覧（このプロジェクト専用）
+
+| scope | 対象 |
+|-------|------|
+| `sync` | Notion 同期機能 |
+| `chat` | チャット機能 |
+| `ui` | コンポーネント・スタイル |
+| `db` | Supabase スキーマ・クエリ |
+| `api` | Route Handlers |
+| `lib` | `lib/` 配下のユーティリティ |
+| `pwa` | PWA 設定 |
+| `deps` | 依存関係の更新 |
+
+### 例
+
+```
+feat(sync): Notion DBからの差分同期を実装
+fix(chat): ストリーミング中にエラーが発生した場合のハンドリングを追加
+refactor(lib): embedText関数をlib/gemini.tsに切り出し
+docs: app-spec.mdにAPIエンドポイント仕様を追記
+```

@@ -1,0 +1,22 @@
+{
+  "name": "Personal Brain Sync",
+  "short_name": "PB-Sync",
+  "description": "自分のNotionノートに基づいてAIが回答する自分専用RAGチャット",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#030712",
+  "theme_color": "#1e1e2e",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
