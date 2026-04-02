@@ -50,7 +50,7 @@ export default function ChatInput({ onSend, disabled }: ChatInputProps) {
         placeholder="ノートについて質問する..."
         disabled={disabled}
         rows={1}
-        className="flex-1 bg-gray-800 text-gray-100 rounded-xl px-4 py-2 text-sm resize-none outline-none focus:ring-2 focus:ring-purple-500 placeholder-gray-500 max-h-32 disabled:opacity-50"
+        className="flex-1 bg-gray-800 text-gray-100 rounded-xl px-4 py-2 text-base resize-none outline-none focus:ring-2 focus:ring-purple-500 placeholder-gray-500 max-h-32 disabled:opacity-50"
       />
       <button
         type="submit"
