@@ -30,7 +30,11 @@ export async function POST(request: NextRequest) {
       match_count: 3,
     })
 
-    if (error) throw new Error(`[Supabase RPC match_notes] ${error.message}`)
+    if (error) {
+      const isHtml = error.message?.trimStart().startsWith('<')
+      const detail = isHtml ? 'Supabase project may be paused (HTTP 521). Restore it at supabase.com/dashboard.' : `${error.message} (code: ${error.code})`
+      throw new Error(`[Supabase RPC match_notes] ${detail}`)
+    }
 
     console.log(`[/api/chat] matched notes: ${(matchedNotes as MatchedNote[])?.map((n) => `"${n.title}" (similarity: ${n.similarity.toFixed(3)})`).join(', ') || 'none'}`)
 
@@ -88,7 +92,8 @@ export async function POST(request: NextRequest) {
       },
     })
   } catch (error) {
-    console.error('[/api/chat]', error)
-    return Response.json({ error: 'Internal Server Error' }, { status: 500 })
+    const message = error instanceof Error ? error.message : String(error)
+    console.error('[/api/chat]', message)
+    return Response.json({ error: message }, { status: 500 })
   }
 }

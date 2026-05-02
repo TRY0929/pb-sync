@@ -1,11 +1,5 @@
-import { Client } from '@notionhq/client'
 import { getSupabaseAdmin } from './supabase'
 import { embedText } from './gemini'
-
-const notion = new Client({
-  auth: process.env.NOTION_API_KEY,
-  timeoutMs: 30000,
-})
 
 interface NotionPage {
   id: string
@@ -14,44 +8,102 @@ interface NotionPage {
   lastEditedTime: string
 }
 
-// データベース内のページ一覧を取得
-async function fetchDatabasePages(): Promise<NotionPage[]> {
-  const pages: NotionPage[] = []
+// API 2025-09-03 用の共通ヘッダー
+const NOTION_HEADERS = {
+  Authorization: `Bearer ${process.env.NOTION_API_KEY}`,
+  'Content-Type': 'application/json',
+  'Notion-Version': '2025-09-03',
+}
+
+// 32文字のIDをUUID形式に変換
+function toUUID(id: string): string {
+  const raw = id.trim()
+  return raw.includes('-')
+    ? raw
+    : raw.replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, '$1-$2-$3-$4-$5')
+}
+
+// データベースのデータソースID一覧を取得
+async function fetchDataSourceIds(dbId: string): Promise<string[]> {
+  const res = await fetch(`https://api.notion.com/v1/databases/${dbId}`, {
+    headers: NOTION_HEADERS,
+  })
+  if (!res.ok) {
+    const err = await res.text()
+    throw new Error(`[Notion GET database] ${res.status}: ${err}`)
+  }
+  const db = await res.json() as { data_sources?: Array<{ id: string }> }
+  return (db.data_sources ?? []).map((ds) => ds.id)
+}
+
+// 1つのデータソースのページを全件取得
+async function queryDataSource(dataSourceId: string): Promise<Array<Record<string, unknown>>> {
+  const results: Array<Record<string, unknown>> = []
   let cursor: string | undefined = undefined
 
   do {
-    const response = await notion.databases.query({
-      database_id: process.env.NOTION_DATABASE_ID!,
-      start_cursor: cursor,
-      page_size: 100,
-    })
+    const body: Record<string, unknown> = { page_size: 100 }
+    if (cursor) body.start_cursor = cursor
 
-    for (const page of response.results) {
-      if (page.object !== 'page') continue
-
-      // タイトル取得
-      let title = 'Untitled'
-      const props = (page as { properties: Record<string, { type: string; title?: Array<{ plain_text: string }> }> }).properties
-      for (const prop of Object.values(props)) {
-        if (prop.type === 'title' && prop.title && prop.title.length > 0) {
-          title = prop.title.map((t) => t.plain_text).join('')
-          break
-        }
-      }
-
-      // ブロックのテキストコンテンツ取得
-      const content = await fetchPageContent(page.id)
-
-      pages.push({
-        id: page.id,
-        title,
-        content,
-        lastEditedTime: (page as { last_edited_time: string }).last_edited_time,
-      })
+    const res = await fetch(
+      `https://api.notion.com/v1/data_sources/${dataSourceId}/query`,
+      {
+        method: 'POST',
+        headers: NOTION_HEADERS,
+        body: JSON.stringify(body),
+      },
+    )
+    if (!res.ok) {
+      const err = await res.text()
+      throw new Error(`[Notion data_sources.query] ${res.status}: ${err}`)
     }
-
+    const response = await res.json() as {
+      results: Array<Record<string, unknown>>
+      next_cursor: string | null
+    }
+    results.push(...response.results)
     cursor = response.next_cursor ?? undefined
   } while (cursor)
+
+  return results
+}
+
+// データベース内のページ一覧を取得
+async function fetchDatabasePages(): Promise<NotionPage[]> {
+  const dbId = toUUID(process.env.NOTION_DATABASE_ID ?? '')
+  const dataSourceIds = await fetchDataSourceIds(dbId)
+
+  // データソースが見つからなければデータベースID自体をフォールバックとして使う
+  const idsToQuery = dataSourceIds.length > 0 ? dataSourceIds : [dbId]
+
+  const allRawPages = (
+    await Promise.all(idsToQuery.map((id) => queryDataSource(id)))
+  ).flat()
+
+  const pages: NotionPage[] = []
+  for (const page of allRawPages) {
+    if (page.object !== 'page') continue
+
+    // タイトル取得
+    let title = 'Untitled'
+    const props = (page as { properties: Record<string, { type: string; title?: Array<{ plain_text: string }> }> }).properties
+    for (const prop of Object.values(props)) {
+      if (prop.type === 'title' && prop.title && prop.title.length > 0) {
+        title = prop.title.map((t) => t.plain_text).join('')
+        break
+      }
+    }
+
+    // ブロックのテキストコンテンツ取得
+    const content = await fetchPageContent(page.id as string)
+
+    pages.push({
+      id: page.id as string,
+      title,
+      content,
+      lastEditedTime: page.last_edited_time as string,
+    })
+  }
 
   return pages
 }
@@ -64,11 +116,19 @@ async function fetchPageContent(pageId: string, depth = 0): Promise<string> {
   let cursor: string | undefined = undefined
 
   do {
-    const response = await notion.blocks.children.list({
-      block_id: pageId,
-      start_cursor: cursor,
-      page_size: 100,
-    })
+    const url = new URL(`https://api.notion.com/v1/blocks/${pageId}/children`)
+    url.searchParams.set('page_size', '100')
+    if (cursor) url.searchParams.set('start_cursor', cursor)
+
+    const res = await fetch(url.toString(), { headers: NOTION_HEADERS })
+    if (!res.ok) {
+      const err = await res.text()
+      throw new Error(`[Notion blocks.children.list] ${res.status}: ${err}`)
+    }
+    const response = await res.json() as {
+      results: Array<Record<string, unknown>>
+      next_cursor: string | null
+    }
 
     for (const block of response.results) {
       const b = block as Record<string, unknown>
@@ -98,7 +158,7 @@ async function fetchPageContent(pageId: string, depth = 0): Promise<string> {
       }
     }
 
-    cursor = (response as { next_cursor: string | null }).next_cursor ?? undefined
+    cursor = response.next_cursor ?? undefined
   } while (cursor)
 
   const childResults = await Promise.all(childPromises)
