@@ -243,6 +243,8 @@ export async function syncNotionToSupabase(
   for (let i = 0; i < pages.length; i++) {
     const page = pages[i]
     onProgress({ status: 'syncing', current: i + 1, total })
+    // RPM 制限対策: ページ間に 700ms のスロットリング
+    if (i > 0) await new Promise((resolve) => setTimeout(resolve, 700))
 
     // 差分チェック：既に同期済みで更新がなければスキップ
     const existingLastSynced = syncedPages.get(page.id)
@@ -268,6 +270,8 @@ export async function syncNotionToSupabase(
     for (let ci = 0; ci < chunks.length; ci++) {
       const chunkId = chunks.length === 1 ? page.id : `${page.id}__chunk_${ci}`
       const chunkTitle = chunks.length === 1 ? page.title : `${page.title} (${ci + 1}/${chunks.length})`
+      // RPM 制限対策: チャンク間に 700ms のスロットリング（100 RPM = 約600ms/req）
+      if (ci > 0) await new Promise((resolve) => setTimeout(resolve, 700))
       const embedding = await embedText(chunks[ci])
 
       const { error } = await getSupabaseAdmin().from('notes').upsert(

@@ -68,11 +68,11 @@ export async function streamChat(
   })
 }
 
-// 指数バックオフでリトライ
+// 指数バックオフでリトライ（RPM 超過は 30s ベース、最大5回）
 async function withRetry<T>(
   fn: () => Promise<T>,
-  maxRetries = 3,
-  baseDelay = 1000
+  maxRetries = 5,
+  baseDelay = 30000
 ): Promise<T> {
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
@@ -84,7 +84,7 @@ async function withRetry<T>(
       if (!isRateLimit || attempt === maxRetries - 1) throw error
 
       const delay = baseDelay * Math.pow(2, attempt)
-      console.warn(`[Gemini] レート制限に達しました。${delay}ms 後にリトライします...`)
+      console.warn(`[Gemini] レート制限に達しました。${Math.round(delay / 1000)}s 後にリトライします... (${attempt + 1}/${maxRetries})`)
       await new Promise((resolve) => setTimeout(resolve, delay))
     }
   }
