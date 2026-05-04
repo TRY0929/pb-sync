@@ -1,11 +1,14 @@
 import { getSupabaseAdmin } from './supabase'
 import { embedText } from './gemini'
 
-interface NotionPage {
+interface NotionPageMeta {
   id: string
   title: string
-  content: string
   lastEditedTime: string
+}
+
+interface NotionPage extends NotionPageMeta {
+  content: string
 }
 
 // API 2025-09-03 用の共通ヘッダー
@@ -68,8 +71,8 @@ async function queryDataSource(dataSourceId: string): Promise<Array<Record<strin
   return results
 }
 
-// データベース内のページ一覧を取得
-async function fetchDatabasePages(): Promise<NotionPage[]> {
+// データベース内のページメタデータ一覧を取得
+async function fetchDatabasePagesMeta(): Promise<NotionPageMeta[]> {
   const dbId = toUUID(process.env.NOTION_DATABASE_ID ?? '')
   const dataSourceIds = await fetchDataSourceIds(dbId)
 
@@ -80,7 +83,7 @@ async function fetchDatabasePages(): Promise<NotionPage[]> {
     await Promise.all(idsToQuery.map((id) => queryDataSource(id)))
   ).flat()
 
-  const pages: NotionPage[] = []
+  const pages: NotionPageMeta[] = []
   for (const page of allRawPages) {
     if (page.object !== 'page') continue
 
@@ -94,18 +97,20 @@ async function fetchDatabasePages(): Promise<NotionPage[]> {
       }
     }
 
-    // ブロックのテキストコンテンツ取得
-    const content = await fetchPageContent(page.id as string)
-
+    // メタデータのみ返す（コンテンツは差分チェック後に取得）
     pages.push({
       id: page.id as string,
       title,
-      content,
       lastEditedTime: page.last_edited_time as string,
     })
   }
 
   return pages
+}
+
+// データベース内のページメタデータ一覧を取得
+async function fetchDatabasePages(): Promise<NotionPageMeta[]> {
+  return fetchDatabasePagesMeta()
 }
 
 // ページのブロック内容をプレーンテキストで取得
@@ -232,30 +237,30 @@ export interface SyncProgress {
 export async function syncNotionToSupabase(
   onProgress: (progress: SyncProgress) => void
 ): Promise<void> {
-  const pages = await fetchDatabasePages()
-  console.log(`[notion-sync] fetched ${pages.length} pages`)
-  pages.forEach((p) => console.log(`  - "${p.title}" content length: ${p.content.length}`))
+  const pageMetas = await fetchDatabasePages()
+  console.log(`[notion-sync] fetched ${pageMetas.length} page metadata`)
   const syncedPages = await fetchSyncedPages()
 
-  let syncedCount = 0
-  const total = pages.length
+  // 差分チェック：更新が必要なページのみに絞り込む
+  const dirtyPages = pageMetas.filter((page) => {
+    const existingLastSynced = syncedPages.get(page.id)
+    if (!existingLastSynced) return true
+    return new Date(page.lastEditedTime).getTime() > new Date(existingLastSynced).getTime()
+  })
+  console.log(`[notion-sync] ${dirtyPages.length}/${pageMetas.length} pages need sync`)
 
-  for (let i = 0; i < pages.length; i++) {
-    const page = pages[i]
+  let syncedCount = 0
+  const total = dirtyPages.length
+
+  for (let i = 0; i < dirtyPages.length; i++) {
+    const page = dirtyPages[i]
     onProgress({ status: 'syncing', current: i + 1, total })
     // RPM 制限対策: ページ間に 700ms のスロットリング
     if (i > 0) await new Promise((resolve) => setTimeout(resolve, 700))
 
-    // 差分チェック：既に同期済みで更新がなければスキップ
-    const existingLastSynced = syncedPages.get(page.id)
-    if (existingLastSynced) {
-      const lastEdited = new Date(page.lastEditedTime).getTime()
-      const lastSynced = new Date(existingLastSynced).getTime()
-      if (lastEdited <= lastSynced) continue
-    }
-
-    // コンテンツが空の場合はスキップ
-    const fullText = `${page.title}\n${page.content}`.trim()
+    // 差分チェック済みのページのみここに来る。コンテンツを取得
+    const content = await fetchPageContent(page.id)
+    const fullText = `${page.title}\n${content}`.trim()
     if (!fullText) continue
 
     // ページ更新時は既存チャンクを全削除してから再挿入
@@ -266,6 +271,7 @@ export async function syncNotionToSupabase(
     if (deleteError) throw new Error(`[Supabase DELETE] ${deleteError.message}`)
 
     // チャンク分割してそれぞれをベクトル化・保存
+    console.log(`[notion-sync] "${page.title}" content length: ${content.length}`)
     const chunks = splitIntoChunks(fullText)
     for (let ci = 0; ci < chunks.length; ci++) {
       const chunkId = chunks.length === 1 ? page.id : `${page.id}__chunk_${ci}`
